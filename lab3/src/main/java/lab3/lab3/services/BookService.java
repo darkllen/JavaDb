@@ -4,6 +4,7 @@ import lab3.lab3.dto.*;
 import lab3.lab3.repos.BookRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import javax.persistence.EntityManager;
@@ -22,20 +23,24 @@ import java.util.Set;
 public class BookService {
 
     @Autowired
-    protected EntityManagerFactory entityManagerFactory;
+    private EntityManagerFactory entityManagerFactory;
 
     private List<Book> getBooksByFiledName(String field, String name){
         EntityManager entityManager = entityManagerFactory.createEntityManager();
-        Query query = entityManager.createQuery("select b FROM Book b JOIN b."+field+" a WHERE a.name=:name");
+        Query query = entityManager.createQuery("select distinct b FROM Book b JOIN b."+field+" a WHERE a.name=:name");
         query.setParameter("name", name);
-        return (List<Book>) query.getResultList();
+        List<Book> res = query.getResultList();
+        entityManager.close();
+        return res;
     }
 
     private List<Book> getBooksBySomeFieldNames(String field, List<String> names){
         EntityManager entityManager = entityManagerFactory.createEntityManager();
-        Query query = entityManager.createQuery("select b FROM Book b JOIN b."+field+" a WHERE a.name IN :names");
+        Query query = entityManager.createQuery("select distinct b FROM Book b JOIN b."+field+" a WHERE a.name IN :names");
         query.setParameter("names", names);
-        return (List<Book>) query.getResultList();
+        List<Book> res = query.getResultList();
+        entityManager.close();
+        return res;
     }
 
     private List<Book> getBooksInFieldRange(String field, int lower, int upper){
@@ -43,14 +48,18 @@ public class BookService {
         Query query = entityManager.createQuery("select b FROM Book b WHERE b."+field+" >= :lower and b."+field+" <= :upper");
         query.setParameter("lower", lower);
         query.setParameter("upper", upper);
-        return (List<Book>) query.getResultList();
+        List<Book> res = query.getResultList();
+        entityManager.close();
+        return res;
     }
 
     private List<Book> getBooksFieldEqual(String field, int val){
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Query query = entityManager.createQuery("select b FROM Book b WHERE b."+field+" = :val");
         query.setParameter("val", val);
-        return (List<Book>) query.getResultList();
+        List<Book> res = query.getResultList();
+        entityManager.close();
+        return res;
     }
 
 
@@ -79,7 +88,6 @@ public class BookService {
         return getBooksInFieldRange("pagesNum", lower, upper);
     }
 
-
     public List<Book> getBooksPriceEqual(int price){
         return getBooksFieldEqual("price", price);
     }
@@ -96,9 +104,10 @@ public class BookService {
                 "WHERE author.name IN :names AND author.name NOT IN " +
                 "(SELECT a.name FROM b.authors a))");
         query.setParameter("names", authorNames);
-        return (List<Book>) query.getResultList();
+        List<Book> res = query.getResultList();
+        entityManager.close();
+        return res;
     }
-
     public List<Book> getBooksAllGenres(List<String> genreNames){
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Query query = entityManager.createQuery("select b FROM Book b " +
@@ -108,7 +117,9 @@ public class BookService {
                 "WHERE genre.name IN :names AND genre.name NOT IN " +
                 "(SELECT a.name FROM b.genres a))");
         query.setParameter("names", genreNames);
-        return (List<Book>) query.getResultList();
+        List<Book> res = query.getResultList();
+        entityManager.close();
+        return res;
     }
 
     public List<Book> searchTextEverywhere(String text){
@@ -129,10 +140,24 @@ public class BookService {
         predicates.add(criteriaBuilder.equal(genres.get("name"), text));
 
         query.select(book).distinct(true).where(criteriaBuilder.or(predicates.toArray(new Predicate[0])));
-        return entityManager.createQuery(query).getResultList();
+
+        List<Book> res = entityManager.createQuery(query).getResultList();
+        entityManager.close();
+        return res;
     }
 
-//    всі книжки групи авторів,жанрам
-//    можливість шукати фрагмент тексту скрізь: в описі, назві, авторах, видавництві
+    public List<Book> filter(Specification<Book> specification) {
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Book> query = criteriaBuilder.createQuery(Book.class);
+        Root<Book> book = query.from(Book.class);
+
+        query.select(book);
+        if (specification != null)
+            query.distinct(true).where(specification.toPredicate(book, query, criteriaBuilder));
+        List<Book> res = entityManager.createQuery(query).getResultList();
+        entityManager.close();
+        return res;
+    }
 
 }

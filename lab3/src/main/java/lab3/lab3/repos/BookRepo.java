@@ -10,4 +10,6 @@ import java.util.Set;
 
 @Repository
 public interface BookRepo  extends JpaRepository<Book, Integer> {
+
+    List<Book> findAll();
 }
